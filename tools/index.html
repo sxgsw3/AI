@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PNG图片生成工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        body {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 0 20px;
+            background: #f5f7fa;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #333;
+        }
+        .input-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .input-box {
+            flex: 1;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            outline: none;
+        }
+        input:focus {
+            border-color: #409eff;
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #409eff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        .btn:hover {
+            background: #337ecc;
+        }
+        .download-btn {
+            background: #67c23a;
+            display: none; /* 默认隐藏，生成后显示 */
+        }
+        .download-btn:hover {
+            background: #529b2e;
+        }
+        .preview {
+            margin: 20px 0;
+            text-align: center;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px dashed #ccc;
+            border-radius: 6px;
+            padding: 10px;
+        }
+        img {
+            max-width: 100%;
+            max-height: 300px;
+            border: 1px solid #eee;
+        }
+        .tip {
+            color: #909399;
+            font-size: 14px;
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>自定义尺寸PNG生成工具</h2>
+
+        <div class="input-group">
+            <div class="input-box">
+                <label>宽度 (X / px)</label>
+                <input type="number" id="width" placeholder="请输入宽度" min="1" value="500">
+            </div>
+            <div class="input-box">
+                <label>高度 (Y / px)</label>
+                <input type="number" id="height" placeholder="请输入高度" min="1" value="300">
+            </div>
+        </div>
+
+        <div class="input-group">
+            <div class="input-box">
+                <label>背景颜色</label>
+                <input type="color" id="bgColor" value="#ffffff">
+            </div>
+            <div class="input-box">
+                <label>颜色值（HEX）</label>
+                <input type="text" id="bgColorText" value="#ffffff" placeholder="#ffffff">
+            </div>
+        </div>
+
+        <button class="btn" onclick="generateImage()">生成图片</button>
+
+        <div class="preview" id="preview">
+            预览区域
+        </div>
+
+        <button class="btn download-btn" id="downloadBtn" onclick="downloadImage()">点击下载PNG图片</button>
+        <p class="tip">生成带背景色的PNG，避免导出空白图</p>
+    </div>
+
+    <script>
+        /**
+         * 脚本用途：
+         * - 将用户输入的宽高与背景色（颜色选择器/HEX 文本）作为参数
+         * - 使用 Canvas 在浏览器端生成对应尺寸、带指定背景色的 PNG（避免透明导致“空白图”）
+         * - 在页面中展示预览，并提供一键下载（文件名为 `${宽}x${高}.png`）
+         * - 同步颜色选择器与 HEX 输入框，保证两种输入方式一致
+         */
+        let currentImageUrl = ''; // 存储生成的图片地址
+        const normalizeHexColor = (value) => {
+            const v = String(value || '').trim();
+            if (!v) return null;
+            return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v) ? v.toLowerCase() : null;
+        };
+
+        const syncBgColor = (source) => {
+            const picker = document.getElementById('bgColor');
+            const text = document.getElementById('bgColorText');
+            if (!picker || !text) return;
+
+            if (source === 'picker') {
+                text.value = picker.value;
+                return;
+            }
+
+            const normalized = normalizeHexColor(text.value);
+            if (normalized) {
+                picker.value = normalized;
+            }
+        };
+
+        // 绑定颜色输入同步
+        document.addEventListener('DOMContentLoaded', () => {
+            const picker = document.getElementById('bgColor');
+            const text = document.getElementById('bgColorText');
+            if (picker) picker.addEventListener('input', () => syncBgColor('picker'));
+            if (text) text.addEventListener('input', () => syncBgColor('text'));
+        });
+
+        // 生成指定尺寸的PNG图片
+        function generateImage() {
+            const width = parseInt(document.getElementById('width').value);
+            const height = parseInt(document.getElementById('height').value);
+            const bgColorInput = document.getElementById('bgColor')?.value;
+            const bgColorText = document.getElementById('bgColorText')?.value;
+            const bgColor = normalizeHexColor(bgColorText) || normalizeHexColor(bgColorInput) || '#ffffff';
+
+            // 校验输入
+            if (!width || width < 1 || !height || height < 1) {
+                alert('请输入有效的正整数尺寸！');
+                return;
+            }
+
+            // 创建画布
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+
+            // 先填充背景色，避免导出透明/空白图
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, width, height);
+
+            // 转换为PNG格式图片地址
+            currentImageUrl = canvas.toDataURL('image/png');
+
+            // 显示预览
+            const previewBox = document.getElementById('preview');
+            previewBox.innerHTML = `<img src="${currentImageUrl}" alt="生成的图片">`;
+
+            // 显示下载按钮
+            document.getElementById('downloadBtn').style.display = 'block';
+        }
+
+        // 下载图片
+        function downloadImage() {
+            if (!currentImageUrl) {
+                alert('请先生成图片！');
+                return;
+            }
+
+            // 创建下载链接
+            const a = document.createElement('a');
+            const width = document.getElementById('width').value;
+            const height = document.getElementById('height').value;
+            // 下载文件名：尺寸.png
+            a.download = `${width}x${height}.png`;
+            a.href = currentImageUrl;
+            a.click();
+        }
+    </script>
+</body>
+</html>
