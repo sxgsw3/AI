@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PNG图片生成工具</title>
+    <title>图片生成工具</title>
     <style>
         * {
             margin: 0;
@@ -96,11 +96,31 @@
             text-align: center;
             margin-top: 10px;
         }
+        .format-options {
+            display: flex;
+            gap: 18px;
+            align-items: center;
+            margin-bottom: 20px;
+            color: #555;
+            flex-wrap: wrap;
+        }
+        .format-options label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 0;
+            font-weight: 400;
+            cursor: pointer;
+        }
+        .format-options input[type="checkbox"] {
+            width: auto;
+            padding: 0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>自定义尺寸PNG生成工具</h2>
+        <h2>自定义尺寸图片生成工具</h2>
 
         <div class="input-group">
             <div class="input-box">
@@ -124,14 +144,27 @@
             </div>
         </div>
 
+        <div class="input-group">
+            <div class="input-box">
+                <label>图片文字</label>
+                <input type="text" id="imageText" placeholder="请输入要写入图片的文字">
+            </div>
+        </div>
+
+        <label>下载格式（可多选）</label>
+        <div class="format-options">
+            <label><input type="checkbox" name="imageFormat" value="png" checked> PNG</label>
+            <label><input type="checkbox" name="imageFormat" value="jpeg"> JPEG</label>
+        </div>
+
         <button class="btn" onclick="generateImage()">生成图片</button>
 
         <div class="preview" id="preview">
             预览区域
         </div>
 
-        <button class="btn download-btn" id="downloadBtn" onclick="downloadImage()">点击下载PNG图片</button>
-        <p class="tip">生成带背景色的PNG，避免导出空白图</p>
+        <button class="btn download-btn" id="downloadBtn" onclick="downloadImage()">点击下载图片</button>
+        <p class="tip">支持多格式下载（可多选），并带背景色避免导出空白图</p>
     </div>
 
     <script>
@@ -142,7 +175,8 @@
          * - 在页面中展示预览，并提供一键下载（文件名为 `${宽}x${高}.png`）
          * - 同步颜色选择器与 HEX 输入框，保证两种输入方式一致
          */
-        let currentImageUrl = ''; // 存储生成的图片地址
+        let currentImageUrl = ''; // 存储预览图片地址
+        let currentCanvas = null; // 存储最新生成的画布，供多格式导出
         const normalizeHexColor = (value) => {
             const v = String(value || '').trim();
             if (!v) return null;
@@ -180,6 +214,7 @@
             const bgColorInput = document.getElementById('bgColor')?.value;
             const bgColorText = document.getElementById('bgColorText')?.value;
             const bgColor = normalizeHexColor(bgColorText) || normalizeHexColor(bgColorInput) || '#ffffff';
+            const imageText = (document.getElementById('imageText')?.value || '').trim();
 
             // 校验输入
             if (!width || width < 1 || !height || height < 1) {
@@ -197,7 +232,20 @@
             ctx.fillStyle = bgColor;
             ctx.fillRect(0, 0, width, height);
 
-            // 转换为PNG格式图片地址
+            // 有输入文字时，将文字绘制在图片中间
+            if (imageText) {
+                const fontSize = Math.max(16, Math.floor(Math.min(width, height) / 8));
+                ctx.fillStyle = '#333333';
+                ctx.font = `${fontSize}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(imageText, width / 2, height / 2, Math.max(50, width - 20));
+            }
+
+            // 保存画布供下载时导出不同格式
+            currentCanvas = canvas;
+
+            // 预览统一使用 PNG
             currentImageUrl = canvas.toDataURL('image/png');
 
             // 显示预览
@@ -210,19 +258,29 @@
 
         // 下载图片
         function downloadImage() {
-            if (!currentImageUrl) {
+            if (!currentImageUrl || !currentCanvas) {
                 alert('请先生成图片！');
                 return;
             }
 
-            // 创建下载链接
-            const a = document.createElement('a');
             const width = document.getElementById('width').value;
             const height = document.getElementById('height').value;
-            // 下载文件名：尺寸.png
-            a.download = `${width}x${height}.png`;
-            a.href = currentImageUrl;
-            a.click();
+            const selectedFormats = Array.from(document.querySelectorAll('input[name="imageFormat"]:checked'))
+                .map((item) => item.value);
+
+            if (!selectedFormats.length) {
+                alert('请至少选择一种下载格式！');
+                return;
+            }
+
+            selectedFormats.forEach((format) => {
+                const mimeType = `image/${format}`;
+                const dataUrl = currentCanvas.toDataURL(mimeType);
+                const a = document.createElement('a');
+                a.download = `${width}x${height}.${format === 'jpeg' ? 'jpg' : format}`;
+                a.href = dataUrl;
+                a.click();
+            });
         }
     </script>
 </body>
